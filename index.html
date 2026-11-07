@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Madras Mafia</title>
+<style>
+:root{--bg:#14110f;--fg:#f4e9d8;--ac:#ffb300;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14110f;--fg:#f4e9d8;--ac:#ffb300}}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif}
+canvas{display:block;width:100%;height:100%}
+#hud{position:fixed;left:12px;top:calc(12px + env(safe-area-inset-top,0px));font-weight:700;text-shadow:0 1px 3px #000;line-height:1.5}
+#msg{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.75);text-align:center;padding:20px}
+#msg h1{color:var(--ac);margin:0 0 8px;font-size:2.2rem}
+#msg p{max-width:460px;margin:6px}
+button{background:var(--ac);border:0;padding:12px 26px;font-size:1.1rem;font-weight:700;border-radius:8px;margin-top:14px;cursor:pointer}
+</style></head><body>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<div id="msg"><h1>MADRAS MAFIA</h1>
+<p>Pick your gangster: <b>1</b> Anbu Anna · <b>2</b> Kaali · <b>3</b> Selvi Akka</p>
+<p>WASD / Arrows: move · E: enter or exit car · Space: grab cash from people nearby · Run over folks and the cops come.</p>
+<p>Earn ₹5000 to become the Thalaivar of the city.</p>
+<button id="go">Start</button></div>
+<script>
+const cv=document.getElementById('c'),g=cv.getContext('2d'),hud=document.getElementById('hud'),msg=document.getElementById('msg');
+const W=2400,chars=[{n:'Anbu Anna',c:'#e53935'},{n:'Kaali',c:'#8e24aa'},{n:'Selvi Akka',c:'#00acc1'}];
+let ch=0,run=false,keys={},P,cars,peds,cops,cash,wanted,hp,cam={x:0,y:0},won=false,heat=0;
+function rs(){cv.width=innerWidth;cv.height=innerHeight}rs();addEventListener('resize',rs);
+const solid=(x,y)=>{if(x<0||y<0||x>W||y>W)return true;const a=x%400,b=y%400;return a>60&&a<340&&b>60&&b<340};
+const road=()=>{const k=Math.floor(Math.random()*6)*400,t=Math.random()*W;return Math.random()<.5?{x:k+Math.random()*60-30+ (k?0:30),y:t}:{x:t,y:k+Math.random()*60-30+(k?0:30)}};
+function fix(o){const p=road();o.x=Math.max(20,Math.min(W-20,p.x));o.y=Math.max(20,Math.min(W-20,p.y))}
+function init(){P={x:200,y:30,a:0,car:null,sp:0};cars=[];peds=[];cops=[];cash=0;wanted=0;hp=100;heat=0;won=false;
+for(let i=0;i<14;i++){const c={x:0,y:0,a:Math.random()*6.28,col:['#fdd835','#43a047','#1e88e5','#fb8c00','#eee'][i%5]};fix(c);cars.push(c)}
+for(let i=0;i<40;i++){const p={x:0,y:0,dx:0,dy:0,t:0,col:'hsl('+Math.random()*360+',60%,60%)',dead:0};fix(p);peds.push(p)}}
+function move(o,dx,dy,r){if(!solid(o.x+dx,o.y,r))o.x+=dx;if(!solid(o.x,o.y+dy,r))o.y+=dy}
+function step(){
+const k=keys,u=k.w||k.arrowup,d=k.s||k.arrowdown,l=k.a||k.arrowleft,r=k.d||k.arrowright;
+if(P.car){const c=P.car;if(u)P.sp=Math.min(6,P.sp+.12);else if(d)P.sp=Math.max(-2.5,P.sp-.12);else P.sp*=.98;
+if(Math.abs(P.sp)>.3){const t=.045*(P.sp>0?1:-1);if(l)c.a-=t;if(r)c.a+=t}
+const dx=Math.cos(c.a)*P.sp,dy=Math.sin(c.a)*P.sp,ox=c.x,oy=c.y;move(c,dx,dy);if(c.x===ox&&c.y===oy)P.sp*=.3;P.x=c.x;P.y=c.y;
+for(const p of peds)if(!p.dead&&Math.abs(P.sp)>2&&Math.hypot(p.x-c.x,p.y-c.y)<16){p.dead=300;wanted=Math.min(5,wanted+1);heat=600;cash+=20}}
+else{move(P,((r?1:0)-(l?1:0))*2.6,((d?1:0)-(u?1:0))*2.6)}
+for(const p of peds){if(p.dead){if(--p.dead<=0){p.dead=0;fix(p)}continue}
+if(--p.t<=0){p.t=60+Math.random()*120;const a=Math.random()*6.28;p.dx=Math.cos(a)*.7;p.dy=Math.sin(a)*.7}move(p,p.dx,p.dy)}
+if(heat>0){heat--;if(heat==0&&wanted>0){wanted--;heat=600}}
+const want=wanted*2;while(cops.length<want){const c={x:0,y:0};fix(c);if(Math.hypot(c.x-P.x,c.y-P.y)>400)cops.push(c)}
+if(wanted==0)cops.length=0;
+for(const c of cops){const a=Math.atan2(P.y-c.y,P.x-c.x),s=P.car?2.2+wanted*.2:2;move(c,Math.cos(a)*s,Math.sin(a)*s);
+if(Math.hypot(P.x-c.x,P.y-c.y)<16&&(!P.car||Math.abs(P.sp)<3)){hp-=.4}}
+if(hp<=0){cash=Math.floor(cash/2);hp=100;wanted=0;P.car=null;P.x=200;P.y=30;P.sp=0;cops=[]}
+if(cash>=5000&&!won){won=true;run=false;msg.querySelector('h1').textContent='THALAIVAR! வெற்றி!';msg.querySelectorAll('p')[0].textContent='You rule Madras, '+chars[ch].n+'.';msg.querySelectorAll('p')[1].textContent='';msg.querySelectorAll('p')[2].textContent='';document.getElementById('go').textContent='Play again';msg.style.display='flex'}}
+function draw(){
+const w=cv.width,h=cv.height;cam.x=P.x-w/2;cam.y=P.y-h/2;g.fillStyle='#3a3a3a';g.fillRect(0,0,w,h);g.save();g.translate(-cam.x,-cam.y);
+for(let x=0;x<W;x+=400)for(let y=0;y<W;y+=400){g.fillStyle='#6d4c41';g.fillRect(x+60,y+60,280,280);g.fillStyle='#8d6e63';g.fillRect(x+80,y+80,240,240);
+g.fillStyle='#ffe082';for(let i=0;i<5;i++)g.fillRect(x+100+i*42,y+100,16,12)}
+g.fillStyle='#fff';for(let x=0;x<=W;x+=400)for(let y=0;y<W;y+=40)g.fillRect(x-2,y,4,20);
+for(const c of cars)car(c,c.col);
+for(const p of peds){g.fillStyle=p.dead?'#b71c1c':p.col;g.beginPath();g.arc(p.x,p.y,p.dead?8:6,0,6.28);g.fill()}
+for(const c of cops){g.fillStyle='#1565c0';g.beginPath();g.arc(c.x,c.y,8,0,6.28);g.fill();g.fillStyle=(Date.now()%400<200)?'#f44':'#44f';g.fillRect(c.x-3,c.y-12,6,4)}
+if(!P.car){g.fillStyle=chars[ch].c;g.beginPath();g.arc(P.x,P.y,8,0,6.28);g.fill();g.strokeStyle='#fff';g.lineWidth=2;g.stroke()}
+g.restore();
+hud.innerHTML=chars[ch].n+'<br>₹'+cash+' / 5000<br>HP '+Math.max(0,Math.round(hp))+'<br>'+'★'.repeat(wanted)+'☆'.repeat(5-wanted)}
+function car(c,col){g.save();g.translate(c.x,c.y);g.rotate(c.a);g.fillStyle=col;g.fillRect(-14,-8,28,16);g.fillStyle='#222';g.fillRect(2,-6,8,12);g.restore()}
+function loop(){if(run){step();draw()}requestAnimationFrame(loop)}
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();keys[k]=1;
+if(msg.style.display!=='none'&&'123'.includes(k)&&k.length==1){ch=+k-1;msg.querySelectorAll('p')[0].innerHTML='Selected: <b>'+chars[ch].n+'</b> (1 Anbu Anna · 2 Kaali · 3 Selvi Akka)'}
+if(!run)return;
+if(k=='e'){if(P.car){P.car=null;P.sp=0}else{let b=null,bd=40;for(const c of cars){const d=Math.hypot(c.x-P.x,c.y-P.y);if(d<bd){bd=d;b=c}}if(b){P.car=b;P.sp=0}}}
+if(k==' '){e.preventDefault();for(const p of peds)if(!p.dead&&Math.hypot(p.x-P.x,p.y-P.y)<28){p.dead=300;cash+=40+Math.floor(Math.random()*60);wanted=Math.min(5,wanted+1);heat=600;break}}});
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=0);
+document.getElementById('go').onclick=()=>{init();msg.style.display='none';run=true};
+init();loop();
+</script></body></html>
